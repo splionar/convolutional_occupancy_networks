@@ -32,7 +32,8 @@ class LocalDecoder(nn.Module):
 
 
         #self.fc_p = nn.Linear(dim, hidden_size)
-        self.fc_p = nn.Linear(224, hidden_size)
+        dimension = int((256 + 128 + 64 + 32 + 32)/1)
+        self.fc_p = nn.Linear(dimension, hidden_size)
 
         self.blocks = nn.ModuleList([
             ResnetBlockFC(hidden_size) for i in range(n_blocks)
@@ -84,8 +85,11 @@ class LocalDecoder(nn.Module):
             if 'yz' in plane_type:
                 c += self.sample_plane_feature(p, c_plane['yz'], plane='yz')
 
-            c = torch.cat((c['depth0'], c['depth1'], c['depth2']), dim=1)
-            c = c.transpose(1, 2)
+            c_ = c['depth0']
+
+            for i in range(1,len(c_plane)):
+                c_ = torch.cat((c_, c['depth{}'.format(i)]), dim=1)
+            c = c_.transpose(1, 2)
 
         #p = p.float()
         #net = self.fc_p(p)

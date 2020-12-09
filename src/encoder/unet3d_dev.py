@@ -255,7 +255,7 @@ class Encoder(nn.Module):
     """
 
     def __init__(self, in_channels, out_channels, conv_kernel_size=3, apply_pooling=True,
-                 pool_kernel_size=(4, 4, 4), pool_type='max', basic_module=DoubleConv, conv_layer_order='crg',
+                 pool_kernel_size=(2, 2, 2), pool_type='max', basic_module=DoubleConv, conv_layer_order='crg',
                  num_groups=8):
         super(Encoder, self).__init__()
         assert pool_type in ['max', 'avg']
@@ -360,7 +360,7 @@ class Upsampling(nn.Module):
     """
 
     def __init__(self, transposed_conv, in_channels=None, out_channels=None, kernel_size=3,
-                 scale_factor=(4, 4, 4), mode='nearest'):
+                 scale_factor=(2, 2, 2), mode='nearest'):
         super(Upsampling, self).__init__()
 
         if transposed_conv:
