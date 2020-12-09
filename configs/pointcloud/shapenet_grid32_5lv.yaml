@@ -21,7 +21,7 @@ model:
       num_levels: 5
       f_maps: 16
       in_channels: 16
-      out_channels: 32
+      out_channels: 16
   decoder: simple_local      
   decoder_kwargs:
     sample_mode: bilinear # bilinear / nearest

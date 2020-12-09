@@ -32,7 +32,7 @@ class LocalDecoder(nn.Module):
 
 
         #self.fc_p = nn.Linear(dim, hidden_size)
-        dimension = int((256 + 128 + 64 + 32 + 32)/1)
+        dimension = int((256 + 128 + 64 + 32 + 16)/1)
         self.fc_p = nn.Linear(dimension, hidden_size)
 
         self.blocks = nn.ModuleList([
