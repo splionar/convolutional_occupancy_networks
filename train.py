@@ -90,7 +90,6 @@ for i in range(len(vis_loader)):
         data_vis_list.append({'category': category_name, 'it': c_it, 'data': data_vis})
 
     model_counter[category_id] += 1
-
 # Model
 model = config.get_model(cfg, device=device, dataset=train_dataset)
 
@@ -108,7 +107,9 @@ try:
 except FileExistsError:
     load_dict = dict()
 epoch_it = load_dict.get('epoch_it', 0)
-it = load_dict.get('it', 0)
+it = load_dict.get('it', -1)
+it0 = load_dict.get('it', -1)
+
 metric_val_best = load_dict.get(
     'loss_val_best', -model_selection_sign * np.inf)
 
@@ -173,7 +174,7 @@ while True:
             checkpoint_io.save('model_%d.pt' % it, epoch_it=epoch_it, it=it,
                                loss_val_best=metric_val_best)
         # Run validation
-        if validate_every > 0 and (it % validate_every) == 0:
+        if (validate_every > 0 and (it % validate_every) == 0) or (it0 + 1 == it):
             eval_dict = trainer.evaluate(val_loader)
             metric_val = eval_dict[model_selection_metric]
             print('Validation metric (%s): %.4f'

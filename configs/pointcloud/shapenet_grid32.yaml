@@ -2,7 +2,7 @@ method: conv_onet
 data:
   input_type: pointcloud
   classes: null
-  path: data/ShapeNet
+  path: /cluster/scratch/slionar/3dv_project/occupancy_networks/data/ShapeNet
   pointcloud_n: 3000
   pointcloud_noise: 0.005
   points_subsample: 2048
@@ -28,11 +28,11 @@ model:
     hidden_size: 32
   c_dim: 32
 training:
-  out_dir: out/pointcloud/shapenet_grid32
+  out_dir: out/pointcloud/shapenet_grid32_modified
   batch_size: 32
   model_selection_metric: iou
   model_selection_mode: maximize
-  print_every: 100
+  print_every: 1000
   visualize_every: 10000
   validate_every: 10000
   checkpoint_every: 2000

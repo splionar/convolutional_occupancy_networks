@@ -191,6 +191,48 @@ class ExtResNetBlock(nn.Module):
 
         return out
 
+class NoSkipConnection(nn.Sequential):
+    """
+    A module consisting of two consecutive convolution layers (e.g. BatchNorm3d+ReLU+Conv3d).
+    We use (Conv3d+ReLU+GroupNorm3d) by default.
+    This can be changed however by providing the 'order' argument, e.g. in order
+    to change to Conv3d+BatchNorm3d+ELU use order='cbe'.
+    Use padded convolutions to make sure that the output (H_out, W_out) is the same
+    as (H_in, W_in), so that you don't have to crop in the decoder path.
+
+    Args:
+        in_channels (int): number of input channels
+        out_channels (int): number of output channels
+        encoder (bool): if True we're in the encoder path, otherwise we're in the decoder
+        kernel_size (int): size of the convolving kernel
+        order (string): determines the order of layers, e.g.
+            'cr' -> conv + ReLU
+            'crg' -> conv + ReLU + groupnorm
+            'cl' -> conv + LeakyReLU
+            'ce' -> conv + ELU
+        num_groups (int): number of groups for the GroupNorm
+    """
+
+    def __init__(self, in_channels, out_channels, encoder, kernel_size=3, order='crg', num_groups=8):
+        super(NoSkipConnection, self).__init__()
+        if encoder:
+            # we're in the encoder path
+            conv1_in_channels = in_channels
+            conv1_out_channels = out_channels // 2
+            if conv1_out_channels < in_channels:
+                conv1_out_channels = in_channels
+            conv2_in_channels, conv2_out_channels = conv1_out_channels, out_channels
+        else:
+            # we're in the decoder path, decrease the number of channels in the 1st convolution
+            conv1_in_channels, conv1_out_channels = in_channels, out_channels
+            conv2_in_channels, conv2_out_channels = out_channels, out_channels
+
+        # conv1
+        self.add_module('SingleConv1',
+                        SingleConv(conv1_in_channels, conv1_out_channels, kernel_size, order, num_groups))
+        # conv2
+        self.add_module('SingleConv2',
+                        SingleConv(conv2_in_channels, conv2_out_channels, kernel_size, order, num_groups))
 
 class Encoder(nn.Module):
     """
@@ -264,6 +306,10 @@ class Decoder(nn.Module):
                                          kernel_size=kernel_size, scale_factor=scale_factor, mode=mode)
             # concat joining
             self.joining = partial(self._joining, concat=True)
+        elif basic_module == NoSkipConnection:
+            self.upsampling = Upsampling(transposed_conv=False, in_channels=in_channels, out_channels=out_channels,
+                                         kernel_size=kernel_size, scale_factor=scale_factor, mode=mode)
+
         else:
             # if basic_module=ExtResNetBlock use transposed convolution upsampling and summation joining
             self.upsampling = Upsampling(transposed_conv=True, in_channels=in_channels, out_channels=out_channels,
@@ -279,9 +325,13 @@ class Decoder(nn.Module):
                                          order=conv_layer_order,
                                          num_groups=num_groups)
 
+
     def forward(self, encoder_features, x):
         x = self.upsampling(encoder_features=encoder_features, x=x)
-        x = self.joining(encoder_features, x)
+
+        if (self.basic_module.__class__.__name__ != "NoSkipConnection"):
+            x = self.joining(encoder_features, x)
+
         x = self.basic_module(x)
         return x
 
@@ -420,6 +470,8 @@ class Abstract3DUNet(nn.Module):
         for i in range(len(reversed_f_maps) - 1):
             if basic_module == DoubleConv:
                 in_feature_num = reversed_f_maps[i] + reversed_f_maps[i + 1]
+            elif basic_module == NoSkipConnection:
+                in_feature_num = reversed_f_maps[i]
             else:
                 in_feature_num = reversed_f_maps[i]
 
@@ -449,6 +501,7 @@ class Abstract3DUNet(nn.Module):
     def forward(self, x):
         # encoder part
         encoders_features = []
+
         for encoder in self.encoders:
             x = encoder(x)
             # reverse the encoder outputs to be aligned with the decoder
@@ -459,20 +512,38 @@ class Abstract3DUNet(nn.Module):
         #unet3d.pytorch.save(x, "testt.pt")
         encoders_features = encoders_features[1:]
 
-        # decoder part
+        # decoder part (Multi-resolution)
+        decoded_fea = {}
+        decoded_fea['depth0'] = x
+
+        i = 0
         for decoder, encoder_features in zip(self.decoders, encoders_features):
             # pass the output from the corresponding encoder and the output
             # of the previous decoder
-            x = decoder(encoder_features, x)
+            decoded_fea['depth{}'.format(i+1)] = decoder(encoder_features, decoded_fea['depth{}'.format(i)])
+            i = i+1
 
-        x = self.final_conv(x)
+        decoded_fea['depth{}'.format(i)] = self.final_conv(decoded_fea['depth{}'.format(i)])
+
+        if self.testing and self.final_activation is not None:
+            decoded_fea['depth{}'.format(i)] = self.final_activation(decoded_fea['depth{}'.formal(i)])
+
+        return decoded_fea
+
+        # decoder part
+        #for decoder, encoder_features in zip(self.decoders, encoders_features):
+            # pass the output from the corresponding encoder and the output
+            # of the previous decoder
+        #    x = decoder(encoder_features, x)
+
+        #x = self.final_conv(x)
 
         # apply final_activation (i.e. Sigmoid or Softmax) only during prediction. During training the network outputs
         # logits and it's up to the user to normalize it before visualising with tensorboard or computing validation metric
-        if self.testing and self.final_activation is not None:
-            x = self.final_activation(x)
+        #if self.testing and self.final_activation is not None:
+        #    x = self.final_activation(x)
 
-        return x
+        #return x
 
 
 class UNet3D(Abstract3DUNet):
@@ -487,7 +558,7 @@ class UNet3D(Abstract3DUNet):
     def __init__(self, in_channels, out_channels, final_sigmoid=True, f_maps=64, layer_order='gcr',
                  num_groups=8, num_levels=4, is_segmentation=True, **kwargs):
         super(UNet3D, self).__init__(in_channels=in_channels, out_channels=out_channels, final_sigmoid=final_sigmoid,
-                                     basic_module=DoubleConv, f_maps=f_maps, layer_order=layer_order,
+                                     basic_module=NoSkipConnection, f_maps=f_maps, layer_order=layer_order,
                                      num_groups=num_groups, num_levels=num_levels, is_segmentation=is_segmentation,
                                      **kwargs)
 

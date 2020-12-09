@@ -22,6 +22,7 @@ parser.add_argument('--no-cuda', action='store_true', help='Do not use cuda.')
 args = parser.parse_args()
 cfg = config.load_config(args.config, 'configs/default.yaml')
 is_cuda = (torch.cuda.is_available() and not args.no_cuda)
+#device = "cpu"
 device = torch.device("cuda" if is_cuda else "cpu")
 
 out_dir = cfg['training']['out_dir']

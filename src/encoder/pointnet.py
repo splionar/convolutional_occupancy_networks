@@ -3,9 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from src.layers import ResnetBlockFC
 from torch_scatter import scatter_mean, scatter_max
-from src.common import coordinate2index, normalize_coordinate, normalize_3d_coordinate, map2local
+from src.common import coordinate2index, normalize_coordinate, normalize_3d_coordinate, map2local, positional_encoding
 from src.encoder.unet import UNet
-from src.encoder.unet3d import UNet3D
+#from src.encoder.unet3d import UNet3D
+from src.encoder.unet3d_dev import UNet3D
 
 
 class LocalPoolPointnet(nn.Module):
@@ -30,10 +31,12 @@ class LocalPoolPointnet(nn.Module):
 
     def __init__(self, c_dim=128, dim=3, hidden_dim=128, scatter_type='max', 
                  unet=False, unet_kwargs=None, unet3d=False, unet3d_kwargs=None, 
-                 plane_resolution=None, grid_resolution=None, plane_type='xz', padding=0.1, n_blocks=5):
+                 plane_resolution=None, grid_resolution=None, plane_type='xz', padding=0.1, n_blocks=5, pos_encoding = True):
         super().__init__()
         self.c_dim = c_dim
 
+        if pos_encoding == True:
+            dim = 60
         self.fc_pos = nn.Linear(dim, 2*hidden_dim)
         self.blocks = nn.ModuleList([
             ResnetBlockFC(2*hidden_dim, hidden_dim) for i in range(n_blocks)
@@ -64,6 +67,10 @@ class LocalPoolPointnet(nn.Module):
             self.scatter = scatter_mean
         else:
             raise ValueError('incorrect scatter type')
+
+        self.pos_encoding = pos_encoding
+        if pos_encoding:
+            self.pe = positional_encoding()
 
 
     def generate_plane_features(self, p, c, plane='xz'):
@@ -134,8 +141,15 @@ class LocalPoolPointnet(nn.Module):
         if 'grid' in self.plane_type:
             coord['grid'] = normalize_3d_coordinate(p.clone(), padding=self.padding)
             index['grid'] = coordinate2index(coord['grid'], self.reso_grid, coord_type='3d')
-        
-        net = self.fc_pos(p)
+
+        ##################
+        if self.pos_encoding:
+            pp = self.pe(p)
+            net = self.fc_pos(pp)
+        else:
+            net = self.fc_pos(p)
+        ##################
+        #net = self.fc_pos(p)
 
         net = self.blocks[0](net)
         for block in self.blocks[1:]:
@@ -147,7 +161,9 @@ class LocalPoolPointnet(nn.Module):
 
         fea = {}
         if 'grid' in self.plane_type:
-            fea['grid'] = self.generate_grid_features(p, c)
+            fea = {**self.generate_grid_features(p, c)}
+        #if 'grid' in self.plane_type:
+        #    fea['grid'] = self.generate_grid_features(p, c)
         if 'xz' in self.plane_type:
             fea['xz'] = self.generate_plane_features(p, c, plane='xz')
         if 'xy' in self.plane_type:
@@ -257,7 +273,7 @@ class PatchLocalPoolPointnet(nn.Module):
             if fea_grid.shape[-1] > self.reso_grid**3: # deal with outliers
                 fea_grid = fea_grid[:, :, :-1]
         fea_grid = fea_grid.reshape(c.size(0), self.c_dim, self.reso_grid, self.reso_grid, self.reso_grid)
-
+        torch.save(fea_grid, "test.pt")
         if self.unet3d is not None:
             fea_grid = self.unet3d(fea_grid)
 
@@ -284,6 +300,8 @@ class PatchLocalPoolPointnet(nn.Module):
 
     def forward(self, inputs):
         p = inputs['points']
+        a = p.size()
+        print(a)
         index = inputs['index']
     
         batch_size, T, D = p.size()

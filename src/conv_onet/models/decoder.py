@@ -31,7 +31,8 @@ class LocalDecoder(nn.Module):
             ])
 
 
-        self.fc_p = nn.Linear(dim, hidden_size)
+        #self.fc_p = nn.Linear(dim, hidden_size)
+        self.fc_p = nn.Linear(224, hidden_size)
 
         self.blocks = nn.ModuleList([
             ResnetBlockFC(hidden_size) for i in range(n_blocks)
@@ -66,8 +67,14 @@ class LocalDecoder(nn.Module):
 
     def forward(self, p, c_plane, **kwargs):
         if self.c_dim != 0:
-            plane_type = list(c_plane.keys())
-            c = 0
+            #plane_type = list(c_plane.keys())
+            #c = 0
+            plane_type = list(c_plane.keys())[0]
+            c = {}
+
+            if 'depth0' in plane_type:
+                for depth in range(len(c_plane)):
+                    c['depth{}'.format(depth)] = self.sample_grid_feature(p, c_plane['depth{}'.format(depth)])
             if 'grid' in plane_type:
                 c += self.sample_grid_feature(p, c_plane['grid'])
             if 'xz' in plane_type:
@@ -76,14 +83,18 @@ class LocalDecoder(nn.Module):
                 c += self.sample_plane_feature(p, c_plane['xy'], plane='xy')
             if 'yz' in plane_type:
                 c += self.sample_plane_feature(p, c_plane['yz'], plane='yz')
+
+            c = torch.cat((c['depth0'], c['depth1'], c['depth2']), dim=1)
             c = c.transpose(1, 2)
 
-        p = p.float()
-        net = self.fc_p(p)
+        #p = p.float()
+        #net = self.fc_p(p)
+
+        net = self.fc_p(c)
 
         for i in range(self.n_blocks):
-            if self.c_dim != 0:
-                net = net + self.fc_c[i](c)
+            #if self.c_dim != 0:
+            #    net = net + self.fc_c[i](c)
 
             net = self.blocks[i](net)
 

@@ -17,8 +17,13 @@ base_path = '/home/slionar/00_eth/mt/matterport3d/v1/scans'
 scene_name = '17DRP5sb8fy'
 out_path = 'data/Matterport3D_processed'
 scene_path = join(base_path, scene_name, 'region_segmentations')
+
+print(scene_path)
+
 regions = [join(scene_path, 'region'+str(m)+'.ply') 
            for m in range(100) if exists(join(scene_path, 'region'+str(m)+'.ply'))]
+
+print(regions)
 outfile = join(out_path, scene_name)
 create_dir(outfile)
 
@@ -27,7 +32,6 @@ dtype = np.float16
 cut_mesh =True
 save_part_mesh = False
 
-print("AAAAAAA")
 
 mat_permute = np.array([
                 [1, 0, 0, 0],
@@ -51,15 +55,15 @@ for idx, r_path in tqdm(enumerate(regions)):
             out_file = join(outfile, 'mesh_fused%d.ply'%idx)
             mesh.export(out_file)
     
-    print(idx)
+
     if idx == 0:
         faces = mesh.faces
         vertices = mesh.vertices
-        print("AA")
+        print("AAAA")
     else:
         faces = np.concatenate([faces, mesh.faces + vertices.shape[0]])
         vertices = np.concatenate([vertices, mesh.vertices])
-        print("BB")
+        print("BBBBB")
 
 mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
 out_file = join(outfile, 'mesh_fused.ply')
