@@ -32,7 +32,9 @@ class LocalDecoder(nn.Module):
 
 
         #self.fc_p = nn.Linear(dim, hidden_size)
-        dimension = int((256 + 128 + 64 + 32 + 16)/1)
+        #dimension = int((256 + 128 + 64 + 32 + 16)/1)
+        dimension = 128+64+32
+        self.fc_p0 = nn.Linear(dim, hidden_size)
         self.fc_p = nn.Linear(dimension, hidden_size)
 
         self.blocks = nn.ModuleList([
@@ -94,11 +96,13 @@ class LocalDecoder(nn.Module):
         #p = p.float()
         #net = self.fc_p(p)
 
-        net = self.fc_p(c)
+        #net = self.fc_p(c)
+        net = self.fc_p0(p)
+        c = self.fc_p(c)
 
         for i in range(self.n_blocks):
-            #if self.c_dim != 0:
-            #    net = net + self.fc_c[i](c)
+            if self.c_dim != 0:
+                net = net + self.fc_c[i](c)
 
             net = self.blocks[i](net)
 
