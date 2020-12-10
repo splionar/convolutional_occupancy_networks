@@ -12,7 +12,7 @@ from src.encoder.unet3d_dev import UNet3D
 class LocalPoolPointnet(nn.Module):
     ''' PointNet-based encoder network with ResNet blocks for each point.
         Number of input points are fixed.
-    
+
     Args:
         c_dim (int): dimension of latent code c
         dim (int): input points dimension
@@ -23,14 +23,14 @@ class LocalPoolPointnet(nn.Module):
         unet3d (bool): weather to use 3D U-Net
         unet3d_kwargs (str): 3D U-Net parameters
         plane_resolution (int): defined resolution for plane feature
-        grid_resolution (int): defined resolution for grid feature 
+        grid_resolution (int): defined resolution for grid feature
         plane_type (str): feature type, 'xz' - 1-plane, ['xz', 'xy', 'yz'] - 3-plane, ['grid'] - 3D grid volume
         padding (float): conventional padding paramter of ONet for unit cube, so [-0.5, 0.5] -> [-0.55, 0.55]
         n_blocks (int): number of blocks ResNetBlockFC layers
     '''
 
-    def __init__(self, c_dim=128, dim=3, hidden_dim=128, scatter_type='max', 
-                 unet=False, unet_kwargs=None, unet3d=False, unet3d_kwargs=None, 
+    def __init__(self, c_dim=128, dim=3, hidden_dim=128, scatter_type='max',
+                 unet=False, unet_kwargs=None, unet3d=False, unet3d_kwargs=None,
                  plane_resolution=None, grid_resolution=None, plane_type='xz', padding=0.1, n_blocks=5, pos_encoding = True):
         super().__init__()
         self.c_dim = c_dim
@@ -160,10 +160,10 @@ class LocalPoolPointnet(nn.Module):
         c = self.fc_c(net)
 
         fea = {}
-        if 'grid' in self.plane_type:
-            fea = {**self.generate_grid_features(p, c)}
         #if 'grid' in self.plane_type:
-        #    fea['grid'] = self.generate_grid_features(p, c)
+        #    fea = {**self.generate_grid_features(p, c)}
+        if 'grid' in self.plane_type:
+            fea['grid'] = self.generate_grid_features(p, c)
         if 'xz' in self.plane_type:
             fea['xz'] = self.generate_plane_features(p, c, plane='xz')
         if 'xy' in self.plane_type:

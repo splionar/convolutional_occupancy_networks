@@ -2,13 +2,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from src.layers import ResnetBlockFC
-from src.common import normalize_coordinate, normalize_3d_coordinate, map2local
+from src.common import normalize_coordinate, normalize_3d_coordinate, map2local, positional_encoding
 
 
 class LocalDecoder(nn.Module):
     ''' Decoder.
         Instead of conditioning on global features, on plane/volume local features.
-
     Args:
         dim (int): input dimension
         c_dim (int): dimension of latent conditioned code c
@@ -20,7 +19,7 @@ class LocalDecoder(nn.Module):
     '''
 
     def __init__(self, dim=3, c_dim=128,
-                 hidden_size=256, n_blocks=5, leaky=False, sample_mode='bilinear', padding=0.1):
+                 hidden_size=256, n_blocks=5, leaky=False, sample_mode='bilinear', padding=0.1, pos_encoding=True):
         super().__init__()
         self.c_dim = c_dim
         self.n_blocks = n_blocks
@@ -30,12 +29,10 @@ class LocalDecoder(nn.Module):
                 nn.Linear(c_dim, hidden_size) for i in range(n_blocks)
             ])
 
+        if pos_encoding==True:
+            dim = 60
 
-        #self.fc_p = nn.Linear(dim, hidden_size)
-        #dimension = int((256 + 128 + 64 + 32 + 16)/1)
-        dimension = 128+64+32
-        self.fc_p0 = nn.Linear(dim, hidden_size)
-        self.fc_p = nn.Linear(dimension, hidden_size)
+        self.fc_p = nn.Linear(dim, hidden_size)
 
         self.blocks = nn.ModuleList([
             ResnetBlockFC(hidden_size) for i in range(n_blocks)
@@ -50,34 +47,31 @@ class LocalDecoder(nn.Module):
 
         self.sample_mode = sample_mode
         self.padding = padding
-    
+
+        self.pos_encoding = pos_encoding
+        if pos_encoding:
+            self.pe = positional_encoding()
 
     def sample_plane_feature(self, p, c, plane='xz'):
-        xy = normalize_coordinate(p.clone(), plane=plane, padding=self.padding) # normalize to the range of (0, 1)
+        xy = normalize_coordinate(p.clone(), plane=plane, padding=self.padding)  # normalize to the range of (0, 1)
         xy = xy[:, :, None].float()
-        vgrid = 2.0 * xy - 1.0 # normalize to (-1, 1)
+        vgrid = 2.0 * xy - 1.0  # normalize to (-1, 1)
         c = F.grid_sample(c, vgrid, padding_mode='border', align_corners=True, mode=self.sample_mode).squeeze(-1)
         return c
 
     def sample_grid_feature(self, p, c):
-        p_nor = normalize_3d_coordinate(p.clone(), padding=self.padding) # normalize to the range of (0, 1)
+        p_nor = normalize_3d_coordinate(p.clone(), padding=self.padding)  # normalize to the range of (0, 1)
         p_nor = p_nor[:, :, None, None].float()
-        vgrid = 2.0 * p_nor - 1.0 # normalize to (-1, 1)
+        vgrid = 2.0 * p_nor - 1.0  # normalize to (-1, 1)
         # acutally trilinear interpolation if mode = 'bilinear'
-        c = F.grid_sample(c, vgrid, padding_mode='border', align_corners=True, mode=self.sample_mode).squeeze(-1).squeeze(-1)
+        c = F.grid_sample(c, vgrid, padding_mode='border', align_corners=True, mode=self.sample_mode).squeeze(
+            -1).squeeze(-1)
         return c
-
 
     def forward(self, p, c_plane, **kwargs):
         if self.c_dim != 0:
-            #plane_type = list(c_plane.keys())
-            #c = 0
-            plane_type = list(c_plane.keys())[0]
-            c = {}
-
-            if 'depth0' in plane_type:
-                for depth in range(len(c_plane)):
-                    c['depth{}'.format(depth)] = self.sample_grid_feature(p, c_plane['depth{}'.format(depth)])
+            plane_type = list(c_plane.keys())
+            c = 0
             if 'grid' in plane_type:
                 c += self.sample_grid_feature(p, c_plane['grid'])
             if 'xz' in plane_type:
@@ -86,19 +80,19 @@ class LocalDecoder(nn.Module):
                 c += self.sample_plane_feature(p, c_plane['xy'], plane='xy')
             if 'yz' in plane_type:
                 c += self.sample_plane_feature(p, c_plane['yz'], plane='yz')
+            c = c.transpose(1, 2)
 
-            c_ = c['depth0']
+        p = p.float()
 
-            for i in range(1,len(c_plane)):
-                c_ = torch.cat((c_, c['depth{}'.format(i)]), dim=1)
-            c = c_.transpose(1, 2)
+        ##################
+        if self.pos_encoding:
+            pp = self.pe(p)
+            net = self.fc_p(pp)
+        else:
+            net = self.fc_p(p)
+        ##################
 
-        #p = p.float()
         #net = self.fc_p(p)
-
-        #net = self.fc_p(c)
-        net = self.fc_p0(p)
-        c = self.fc_p(c)
 
         for i in range(self.n_blocks):
             if self.c_dim != 0:

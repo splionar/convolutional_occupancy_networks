@@ -512,6 +512,7 @@ class Abstract3DUNet(nn.Module):
         #unet3d.pytorch.save(x, "testt.pt")
         encoders_features = encoders_features[1:]
 
+        """
         # decoder part (Multi-resolution)
         decoded_fea = {}
         decoded_fea['depth0'] = x
@@ -529,21 +530,22 @@ class Abstract3DUNet(nn.Module):
             decoded_fea['depth{}'.format(i)] = self.final_activation(decoded_fea['depth{}'.formal(i)])
 
         return decoded_fea
+        """
 
         # decoder part
-        #for decoder, encoder_features in zip(self.decoders, encoders_features):
+        for decoder, encoder_features in zip(self.decoders, encoders_features):
             # pass the output from the corresponding encoder and the output
             # of the previous decoder
-        #    x = decoder(encoder_features, x)
+            x = decoder(encoder_features, x)
 
-        #x = self.final_conv(x)
+        x = self.final_conv(x)
 
         # apply final_activation (i.e. Sigmoid or Softmax) only during prediction. During training the network outputs
         # logits and it's up to the user to normalize it before visualising with tensorboard or computing validation metric
-        #if self.testing and self.final_activation is not None:
-        #    x = self.final_activation(x)
+        if self.testing and self.final_activation is not None:
+            x = self.final_activation(x)
 
-        #return x
+        return x
 
 
 class UNet3D(Abstract3DUNet):
