@@ -200,7 +200,7 @@ class PatchLocalPoolPointnet(nn.Module):
     def __init__(self, c_dim=128, dim=3, hidden_dim=128, scatter_type='max', 
                  unet=False, unet_kwargs=None, unet3d=False, unet3d_kwargs=None, 
                  plane_resolution=None, grid_resolution=None, plane_type='xz', padding=0.1, n_blocks=5, 
-                 local_coord=False, pos_encoding='linear', unit_size=0.1):
+                 local_coord=False, pos_encoding='sin_cos', unit_size=0.1):
         super().__init__()
         self.c_dim = c_dim
 
@@ -300,8 +300,6 @@ class PatchLocalPoolPointnet(nn.Module):
 
     def forward(self, inputs):
         p = inputs['points']
-        a = p.size()
-        print(a)
         index = inputs['index']
     
         batch_size, T, D = p.size()

@@ -125,7 +125,7 @@ class PatchLocalDecoder(nn.Module):
     '''
 
     def __init__(self, dim=3, c_dim=128,
-                 hidden_size=256, leaky=False, n_blocks=5, sample_mode='bilinear', local_coord=False, pos_encoding='linear', unit_size=0.1, padding=0.1):
+                 hidden_size=256, leaky=False, n_blocks=5, sample_mode='bilinear', local_coord=False, pos_encoding='sin_cos', unit_size=0.1, padding=0.1):
         super().__init__()
         self.c_dim = c_dim
         self.n_blocks = n_blocks
