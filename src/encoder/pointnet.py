@@ -433,7 +433,6 @@ class PatchLocalPoolPointnet(nn.Module):
             if fea_grid.shape[-1] > self.reso_grid**3: # deal with outliers
                 fea_grid = fea_grid[:, :, :-1]
         fea_grid = fea_grid.reshape(c.size(0), self.c_dim, self.reso_grid, self.reso_grid, self.reso_grid)
-        torch.save(fea_grid, "test.pt")
         if self.unet3d is not None:
             fea_grid = self.unet3d(fea_grid)
 
