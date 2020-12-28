@@ -543,7 +543,6 @@ class Abstract3DUNet(nn.Module):
             # pass the output from the corresponding encoder and the output
             # of the previous decoder
             x = decoder(encoder_features, x)
-            print(x.size())
 
         x = self.final_conv(x)
 
