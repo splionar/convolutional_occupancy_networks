@@ -1,0 +1,23 @@
+inherit_from: configs/pointcloud_crop/room_grid64.yaml
+data:
+  input_type: pointcloud_crop
+  classes: ['']
+  path: /home/slionar/00_eth/mt/convolutional_occupancy_networks/data/redwood_full
+  pointcloud_n: 400000
+  pointcloud_noise: 0.000
+  pointcloud_file: pointcloud.npz
+  voxels_file: null
+  points_file: null
+  points_iou_file: null
+  multi_files: null
+  unit_size: 0.02  # define the size of a voxel, in meter
+  query_vol_size: 50 # query crop in voxel
+training:
+  out_dir: out/redwood_full_005_test6_shp_pe
+test:
+  model_file: /home/slionar/shapenet_grid64_pe.pt
+generation:
+  generation_dir: generation
+  sliding_window: True # generate mesh in the sliding-window manner
+  resolution_0: 128 # resolution for each crop
+  upsampling_steps: 0

@@ -5,6 +5,7 @@ from src.conv_onet.models import decoder
 
 # Decoder dictionary
 decoder_dict = {
+    'simple_local_merge': decoder.LocalDecoderMerge,
     'simple_local': decoder.LocalDecoder,
     'simple_local_crop': decoder.PatchLocalDecoder,
     'simple_local_point': decoder.LocalPointDecoder
@@ -75,6 +76,19 @@ class ConvolutionalOccupancyNetwork(nn.Module):
         logits = self.decoder(p, c, **kwargs)
         p_r = dist.Bernoulli(logits=logits)
         return p_r
+
+    def decode_merge(self, p, c, **kwargs):
+        ''' Returns occupancy probabilities for the sampled points.
+
+        Args:
+            p (tensor): points
+            c (dict): latent conditioned code c
+        '''
+
+        logits_merge, logits_combined = self.decoder(p, c, **kwargs)
+        p_r_merge = dist.Bernoulli(logits=logits_merge)
+        p_r_combined = dist.Bernoulli(logits=logits_combined)
+        return p_r_merge, p_r_combined
 
     def to(self, device):
         ''' Puts the model to the device.

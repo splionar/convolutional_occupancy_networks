@@ -3,7 +3,7 @@ import torch.distributions as dist
 from torch import nn
 import os
 from src.encoder import encoder_dict
-from src.conv_onet import models, training
+from src.conv_onet import models, training, training_merge
 from src.conv_onet import generation
 from src import data
 from src import config
@@ -105,6 +105,28 @@ def get_trainer(model, optimizer, cfg, device, **kwargs):
 
     return trainer
 
+def get_trainer_merge(model, model_merge, optimizer, cfg, device, **kwargs):
+    ''' Returns the trainer object.
+
+    Args:
+        model (nn.Module): the Occupancy Network model
+        optimizer (optimizer): pytorch optimizer object
+        cfg (dict): imported yaml config
+        device (device): pytorch device
+    '''
+    threshold = cfg['test']['threshold']
+    out_dir = cfg['training']['out_dir']
+    vis_dir = os.path.join(out_dir, 'vis')
+    input_type = cfg['data']['input_type']
+
+    trainer = training_merge.Trainer(
+        model, model_merge, optimizer,
+        device=device, input_type=input_type,
+        vis_dir=vis_dir, threshold=threshold,
+        eval_sample=cfg['training']['eval_sample'],
+    )
+
+    return trainer
 
 def get_generator(model, cfg, device, **kwargs):
     ''' Returns the generator object.

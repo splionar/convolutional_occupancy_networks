@@ -10,6 +10,7 @@ from src import config, data
 from src.checkpoints import CheckpointIO
 from collections import defaultdict
 import shutil
+from src import merging
 
 
 # Arguments
@@ -74,7 +75,7 @@ model_counter = defaultdict(int)
 data_vis_list = []
 
 # Build a data dictionary for visualization
-
+"""
 iterator = iter(vis_loader)
 for i in range(len(vis_loader)):
     data_vis = next(iterator)
@@ -91,23 +92,45 @@ for i in range(len(vis_loader)):
         data_vis_list.append({'category': category_name, 'it': c_it, 'data': data_vis})
 
     model_counter[category_id] += 1
-
+"""
 # Model
 model = config.get_model(cfg, device=device, dataset=train_dataset)
+#model.encoder.unet3d.decoders[0].basic_module(torch.rand(1,128, 8, 8, 8).to('cuda'))
+
+
+# Model for merging
+model_merging = None
+model_merging = merging.TestConv3D().to(device)
 
 # Generator
 generator = config.get_generator(model, cfg, device=device)
 
 # Intialize training
-optimizer = optim.Adam(model.parameters(), lr=1e-4)
 # optimizer = optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
-trainer = config.get_trainer(model, optimizer, cfg, device=device)
+#TODO: Modify get_trainer to include merging
+# src/conv_onet/config.py
+# src/config.py
+# Then, modify training.py -> Trainer
 
-checkpoint_io = CheckpointIO(out_dir, model=model, optimizer=optimizer)
+#TODO: adjust optimizer based on whether merging or normal training
+if model_merging is not None:
+    # Freeze ConvONet parameters
+    for parameter in model.parameters():
+        parameter.requires_grad = False
+    optimizer = optim.Adam(list(model.parameters()) + list(model_merging.parameters()), lr=1e-4)
+    trainer = config.get_trainer_merge(model, model_merging, optimizer, cfg, device=device)
+else:
+    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    trainer = config.get_trainer(model, optimizer, cfg, device=device)
+
+#checkpoint_io = CheckpointIO(out_dir, model=model, optimizer=optimizer)
+checkpoint_io = CheckpointIO(out_dir, model=model)
 try:
     load_dict = checkpoint_io.load('model.pt')
 except FileExistsError:
     load_dict = dict()
+
+checkpoint_io = CheckpointIO(out_dir, model=model, optimizer=optimizer)
 epoch_it = load_dict.get('epoch_it', 0)
 it = load_dict.get('it', -1)
 it0 = load_dict.get('it', -1)
@@ -152,7 +175,7 @@ while True:
             print('Visualizing')
             for data_vis in data_vis_list:
                 if cfg['generation']['sliding_window']:
-                    out = generator.generate_mesh_sliding(data_vis['data'])    
+                    out = generator.generate_mesh_sliding(data_vis['data'])
                 else:
                     out = generator.generate_mesh(data_vis['data'])
                 # Get statistics
@@ -163,6 +186,7 @@ while True:
 
                 mesh.export(os.path.join(out_dir, 'vis', '{}_{}_{}.off'.format(it, data_vis['category'], data_vis['it'])))
 
+        #TODO: Write save model for merging model
 
         # Save checkpoint
         if (checkpoint_every > 0 and (it % checkpoint_every) == 0):
@@ -176,8 +200,8 @@ while True:
             checkpoint_io.save('model_%d.pt' % it, epoch_it=epoch_it, it=it,
                                loss_val_best=metric_val_best)
         # Run validation
-        #if validate_every == -1:
-        if (validate_every > 0 and (it % validate_every) == 0) or (it0 + 1 == it):
+        if validate_every == -1:
+        #if (validate_every > 0 and (it % validate_every) == 0) or (it0 + 1 == it):
             eval_dict = trainer.evaluate(val_loader)
             metric_val = eval_dict[model_selection_metric]
             print('Validation metric (%s): %.4f'

@@ -3,7 +3,7 @@ data:
   input_type: pointcloud
   classes: null
   path: /home/slionar/00_eth/3dv/data/ShapeNet
-  pointcloud_n: 3000
+  pointcloud_n: 1500
   pointcloud_noise: 0.005
   points_subsample: 2048
   points_file: points.npz
@@ -11,7 +11,7 @@ data:
   # points_unpackbits: false
   voxels_file: null
 model:
-  encoder: pointnet_local_pool
+  encoder: pointnet_local_pool_merge
   encoder_kwargs:
     hidden_dim: 32
     plane_type: 'grid'
@@ -22,13 +22,15 @@ model:
       f_maps: 32
       in_channels: 32
       out_channels: 32
-  decoder: simple_local      
+    pos_encoding: False
+  decoder: simple_local_merge
   decoder_kwargs:
     sample_mode: bilinear # bilinear / nearest
     hidden_size: 32
+    pos_encoding: False
   c_dim: 32
 training:
-  out_dir: out/pointcloud/shapenet_grid32_modified_test2
+  out_dir: out/pointcloud/shapenet_grid32_modified_test
   batch_size: 4
   model_selection_metric: iou
   model_selection_mode: maximize

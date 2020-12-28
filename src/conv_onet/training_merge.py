@@ -8,8 +8,6 @@ from src.common import (
 )
 from src.utils import visualize as vis
 from src.training import BaseTrainer
-from math import sin,cos,radians,sqrt
-import random
 
 class Trainer(BaseTrainer):
     ''' Trainer object for the Occupancy Network.
@@ -25,9 +23,10 @@ class Trainer(BaseTrainer):
 
     '''
 
-    def __init__(self, model, optimizer, device=None, input_type='pointcloud',
+    def __init__(self, model, model_merge, optimizer, device=None, input_type='pointcloud',
                  vis_dir=None, threshold=0.5, eval_sample=False):
         self.model = model
+        self.model_merge = model_merge
         self.optimizer = optimizer
         self.device = device
         self.input_type = input_type
@@ -38,15 +37,16 @@ class Trainer(BaseTrainer):
         if vis_dir is not None and not os.path.exists(vis_dir):
             os.makedirs(vis_dir)
 
-    def train_step(self, data, DEGREES = 0):
+    def train_step(self, data):
         ''' Performs a training step.
+
         Args:
             data (dict): data dictionary
-            DEGREES (integer): degree range in which object is going to be rotated
         '''
         self.model.train()
+        self.model_merge.train()
         self.optimizer.zero_grad()
-        loss = self.compute_loss(data, DEGREES = DEGREES)
+        loss = self.compute_loss(data)
         loss.backward()
         self.optimizer.step()
 
@@ -59,6 +59,7 @@ class Trainer(BaseTrainer):
             data (dict): data dictionary
         '''
         self.model.eval()
+        self.model_merge.eval()
 
         device = self.device
         threshold = self.threshold
@@ -84,6 +85,7 @@ class Trainer(BaseTrainer):
         points_iou = add_key(points_iou, data.get('points_iou.normalized'), 'p', 'p_n', device=device)
 
         # Compute iou
+        #TODO: Adjust forward, e.g. separate to encode inputs (+merge), decode
         with torch.no_grad():
             p_out = self.model(points_iou, inputs, 
                                sample=self.eval_sample, **kwargs)
@@ -114,7 +116,7 @@ class Trainer(BaseTrainer):
 
         return eval_dict
 
-    def compute_loss(self, data, DEGREES = 0):
+    def compute_loss(self, data):
         ''' Computes the loss.
 
         Args:
@@ -124,10 +126,6 @@ class Trainer(BaseTrainer):
         p = data.get('points').to(device)
         occ = data.get('points.occ').to(device)
         inputs = data.get('inputs', torch.empty(p.size(0), 0)).to(device)
-
-        if (DEGREES != 0):
-            inputs, rotation = self.rotate_points(inputs, DEGREES=DEGREES)
-            p = self.rotate_points(p, use_rotation_tensor=True)
         
         if 'pointcloud_crop' in data.keys():
             # add pre-computed index
@@ -140,57 +138,25 @@ class Trainer(BaseTrainer):
 
         kwargs = {}
         # General points
-        logits = self.model.decode(p, c, **kwargs).logits
-        loss_i = F.binary_cross_entropy_with_logits(
-            logits, occ, reduction='none')
-        loss = loss_i.sum(-1).mean()
+
+        #TODO: Add merging here
+        c = self.model_merge(c)
+
+        # Merging
+        p_r_merge, p_r_combined = self.model.decode_merge(p, c, **kwargs)
+
+        logits_merge = p_r_merge.logits
+        logits_combined = p_r_combined.logits
+
+        loss_i = torch.nn.MSELoss()
+        loss = loss_i(logits_merge, logits_combined)
+        #print(loss_io.mean())
+        #loss = loss_io.sum(-1).mean()
+        #loss = loss_io.sum(-1)
+
+        #logits = self.model.decode(p, c, **kwargs).logits
+        #loss_i = F.binary_cross_entropy_with_logits(
+        #    logits, occ, reduction='none')
+        #loss = loss_i.sum(-1).mean()
 
         return loss
-
-    def rotate_points(self, pointcloud_model, DEGREES=0, query_points=False, use_rotation_tensor=False,
-                      save_rotation_tensor=False):
-        ## https://en.wikipedia.org/wiki/Rotation_matrix
-        """
-            Function for rotating points
-            Args:
-                pointcloud_model (numpy 3d array) - batch_size x pointcloud_size x 3d channel sized numpy array which presents pointcloud
-                DEGREES (int) - range of rotations to be used
-                query_points (boolean) - used for rotating query points with already existing rotation matrix
-                use_rotation_tensor (boolean) - asking whether DEGREES should be used for generating new rotation matrix, or use the already established one
-                save_rotation_tensor (boolean) - asking to keep rotation matrix in a pytorch .pt file
-        """
-        if (use_rotation_tensor != True):
-            angle_range = DEGREES
-            x_angle = radians(random.uniform(-1,1) * 5)
-            y_angle = radians(random.uniform(-1,1) * 180)
-            z_angle = radians(random.uniform(-1,1) * 5)
-
-            rot_x = torch.Tensor(
-                [[1, 0, 0, 0], [0, cos(x_angle), -sin(x_angle), 0], [0, sin(x_angle), cos(x_angle), 0], [0, 0, 0, 1]])
-            rot_y = torch.Tensor(
-                [[cos(y_angle), 0, sin(y_angle), 0], [0, 1, 0, 0], [-sin(y_angle), 0, cos(y_angle), 0], [0, 0, 0, 1]])
-            rot_z = torch.Tensor(
-                [[cos(z_angle), -sin(z_angle), 0, 0], [sin(z_angle), cos(z_angle), 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
-
-            rotation_matrix = torch.mm(rot_z, rot_y)
-            rotation_matrix = torch.mm(rot_x, rotation_matrix)
-            rotation_matrix = torch.transpose(rotation_matrix, 0, 1)
-
-            batch_size, point_cloud_size, _ = pointcloud_model.shape
-            pointcloud_model = torch.cat(
-                [pointcloud_model, torch.ones(batch_size, point_cloud_size, 1).to(self.device)], dim=2)
-
-            pointcloud_model_rotated = torch.matmul(pointcloud_model, rotation_matrix.to(self.device))
-            self.rotation_matrix = rotation_matrix
-
-            if (save_rotation_tensor):
-                torch.save(rotation_matrix, 'rotation_matrix.pt')  # used for plane prediction, change it at your will
-            return pointcloud_model_rotated[:, :, 0:3], (x_angle, y_angle, z_angle)
-        else:
-            batch_size, point_cloud_size, _ = pointcloud_model.shape
-            #pointcloud_model = pointcloud_model / sqrt(0.55 ** 2 + 0.55 ** 2 + 0.55 ** 2)
-            pointcloud_model = torch.cat(
-                [pointcloud_model, torch.ones(batch_size, point_cloud_size, 1).to(self.device)], dim=2)
-            pointcloud_model_rotated = torch.matmul(pointcloud_model, self.rotation_matrix.to(self.device))
-            return pointcloud_model_rotated[:, :, 0:3]
-

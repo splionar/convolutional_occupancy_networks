@@ -1,14 +1,16 @@
 method: conv_onet
 data:
   input_type: pointcloud
-  classes: null
-  path: /home/slionar/00_eth/3dv/data/ShapeNet
-  pointcloud_n: 3000
+  classes: [ 'bedroom' ]
+  path: /media/slionar/T7/redwood_preprocessed/
+  pointcloud_n: 10000
   pointcloud_noise: 0.005
   points_subsample: 2048
-  points_file: points.npz
-  points_iou_file: points.npz
-  # points_unpackbits: false
+  points_file: points_iou
+  points_iou_file: points_iou
+  pointcloud_file: pointcloud
+  pointcloud_chamfer_file: pointcloud
+  multi_files: 10
   voxels_file: null
 model:
   encoder: pointnet_local_pool
@@ -28,11 +30,11 @@ model:
     hidden_size: 32
   c_dim: 32
 training:
-  out_dir: out/pointcloud/shapenet_grid32_modified_test2
-  batch_size: 4
+  out_dir: out/pointcloud/testt
+  batch_size: 1
   model_selection_metric: iou
   model_selection_mode: maximize
-  print_every: 10
+  print_every: 1000
   visualize_every: 10000
   validate_every: 10000
   checkpoint_every: 2000
@@ -43,6 +45,7 @@ test:
   threshold: 0.2
   eval_mesh: true
   eval_pointcloud: false
+  remove_wall: true
   model_file: model_best.pt
 generation:
   vis_n_outputs: 2

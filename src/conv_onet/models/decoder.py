@@ -3,6 +3,152 @@ import torch.nn as nn
 import torch.nn.functional as F
 from src.layers import ResnetBlockFC
 from src.common import normalize_coordinate, normalize_3d_coordinate, map2local, positional_encoding
+from src.encoder.unet3d_latent import UNet3D_latent
+from src.encoder.pointnet import LocalPoolPointnetMerge
+
+class LocalDecoderMerge(nn.Module):
+    ''' Decoder.
+        Instead of conditioning on global features, on plane/volume local features.
+    Args:
+        dim (int): input dimension
+        c_dim (int): dimension of latent conditioned code c
+        hidden_size (int): hidden size of Decoder network
+        n_blocks (int): number of blocks ResNetBlockFC layers
+        leaky (bool): whether to use leaky ReLUs
+        sample_mode (str): sampling feature strategy, bilinear|nearest
+        padding (float): conventional padding paramter of ONet for unit cube, so [-0.5, 0.5] -> [-0.55, 0.55]
+    '''
+
+    def __init__(self, dim=3, c_dim=128,
+                 hidden_size=256, n_blocks=5, leaky=False, sample_mode='bilinear', padding=0.1, pos_encoding=False):
+        super().__init__()
+        self.c_dim = c_dim
+        self.n_blocks = n_blocks
+
+        if c_dim != 0:
+            self.fc_c = nn.ModuleList([
+                nn.Linear(c_dim, hidden_size) for i in range(n_blocks)
+            ])
+
+        if pos_encoding==True:
+            dim = 60
+
+        self.fc_p = nn.Linear(dim, hidden_size)
+
+        self.blocks = nn.ModuleList([
+            ResnetBlockFC(hidden_size) for i in range(n_blocks)
+        ])
+
+        self.fc_out = nn.Linear(hidden_size, 1)
+
+        if not leaky:
+            self.actvn = F.relu
+        else:
+            self.actvn = lambda x: F.leaky_relu(x, 0.2)
+
+        self.sample_mode = sample_mode
+        self.padding = padding
+
+        self.pos_encoding = pos_encoding
+        if pos_encoding:
+            self.pe = positional_encoding()
+
+    def sample_plane_feature(self, p, c, plane='xz'):
+        xy = normalize_coordinate(p.clone(), plane=plane, padding=self.padding)  # normalize to the range of (0, 1)
+        xy = xy[:, :, None].float()
+        vgrid = 2.0 * xy - 1.0  # normalize to (-1, 1)
+        c = F.grid_sample(c, vgrid, padding_mode='border', align_corners=True, mode=self.sample_mode).squeeze(-1)
+        return c
+
+    def sample_grid_feature(self, p, c):
+        p_nor = normalize_3d_coordinate(p.clone(), padding=self.padding)  # normalize to the range of (0, 1)
+        p_nor = p_nor[:, :, None, None].float()
+        vgrid = 2.0 * p_nor - 1.0  # normalize to (-1, 1)
+        # acutally trilinear interpolation if mode = 'bilinear'
+        c = F.grid_sample(c, vgrid, padding_mode='border', align_corners=True, mode=self.sample_mode).squeeze(
+            -1).squeeze(-1)
+        return c
+
+    def unet3d_decode(self, z, decoder_unet):
+        batch_size, num_channels, h, w, d = z.size()
+
+        for depth in range(len(decoder_unet)):
+            up = (depth + 1) * 2
+            dummy_shape_tensor = torch.zeros(1, 1, h * up, w * up, d * up)
+            z = decoder_unet[depth].upsampling(dummy_shape_tensor, z)
+            z = decoder_unet[depth].basic_module(z)
+
+        return z
+
+
+    def forward(self, p, fea, **kwargs):
+
+        decoder_unet = fea['unet3d'].decoders
+
+        p = p[::2] #TODO: properly halve batch size for query points
+
+        """
+        decoders
+          decoders[0]
+            decoders[0].upsampling()
+            decoders[0].basic_module()
+          decoders[1]
+            decoders[1].upsampling()
+            decoders[1].basic_module()
+        final_conv
+        final_activation
+        """
+
+        # Decode merging (prediction from merging)
+        z_merge = fea['latent_merge']
+        z_merge = self.unet3d_decode(z_merge, decoder_unet)
+        z_merge = fea['unet3d'].final_conv(z_merge)
+        z_merge = fea['unet3d'].final_activation(z_merge)
+
+        # Get c_prediction
+        c_merge = self.sample_grid_feature(p, z_merge)
+        c_merge = c_merge.transpose(1,2)
+
+        # Decode combination (Combined scans)
+        z_combined = fea['latent_12']
+        z_combined = self.unet3d_decode(z_combined, decoder_unet)
+        z_combined = fea['unet3d'].final_conv(z_combined)
+        z_combined = fea['unet3d'].final_activation(z_combined)
+
+        # Get c_combined
+        c_combined = self.sample_grid_feature(p, z_combined)
+        c_combined = c_combined.transpose(1,2)
+
+        p = p.float()
+
+        # Pass to FC and get proba/logit
+
+        ## Prediction
+        net_merge = self.fc_p(p)
+
+        for i in range(self.n_blocks):
+            if self.c_dim != 0:
+                net_merge = net_merge + self.fc_c[i](c_merge)
+
+            net_merge = self.blocks[i](net_merge)
+
+        out_merge = self.fc_out(self.actvn(net_merge))
+        out_merge = out_merge.squeeze(-1)
+
+
+        ## Combined
+        net_combined = self.fc_p(p)
+
+        for i in range(self.n_blocks):
+            if self.c_dim != 0:
+                net_combined = net_combined + self.fc_c[i](c_combined)
+
+            net_combined = self.blocks[i](net_combined)
+
+        out_combined = self.fc_out(self.actvn(net_combined))
+        out_combined = out_combined.squeeze(-1)
+
+        return out_merge, out_combined
 
 
 class LocalDecoder(nn.Module):
@@ -125,7 +271,7 @@ class PatchLocalDecoder(nn.Module):
     '''
 
     def __init__(self, dim=3, c_dim=128,
-                 hidden_size=256, leaky=False, n_blocks=5, sample_mode='bilinear', local_coord=False, pos_encoding='sin_cos', unit_size=0.1, padding=0.1):
+                 hidden_size=256, leaky=False, n_blocks=5, sample_mode='bilinear', local_coord=False, pos_encoding='linear', unit_size=0.1, padding=0.1):
         super().__init__()
         self.c_dim = c_dim
         self.n_blocks = n_blocks

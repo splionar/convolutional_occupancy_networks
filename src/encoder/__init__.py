@@ -4,6 +4,7 @@ from src.encoder import (
 
 
 encoder_dict = {
+    'pointnet_local_pool_merge': pointnet.LocalPoolPointnetMerge,
     'pointnet_local_pool': pointnet.LocalPoolPointnet,
     'pointnet_crop_local_pool': pointnet.PatchLocalPoolPointnet,
     'pointnet_plus_plus': pointnetpp.PointNetPlusPlus,

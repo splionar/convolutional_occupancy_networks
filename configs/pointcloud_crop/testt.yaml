@@ -1,8 +1,8 @@
 method: conv_onet
 data:
-  input_type: pointcloud_crop
-  classes: ['rooms_04', 'rooms_05', 'rooms_06', 'rooms_07', 'rooms_08']
-  path: /media/slionar/T7/synthtic_room_dataset/RoomDataset5
+  input_type: pointcloud
+  classes: ['bedroom']
+  path: /media/slionar/T7/redwood_preprocessed/
   pointcloud_n: 10000
   pointcloud_noise: 0.005
   points_subsample: 1024
@@ -12,26 +12,21 @@ data:
   pointcloud_chamfer_file: pointcloud
   voxels_file: null
   multi_files: 10
-  unit_size: 0.005 # size of a voxel
-  query_vol_size: 25
 model:
-  local_coord: True
-  encoder: pointnet_crop_local_pool
+  encoder: pointnet_local_pool
   encoder_kwargs:
     hidden_dim: 32
     plane_type: ['grid']
     unet3d: True
     unet3d_kwargs:
-      num_levels: 4 # define the receptive field, 3 -> 32, 4 -> 64
+      num_levels: 3 # define the receptive field, 3 -> 32, 4 -> 64
       f_maps: 32
       in_channels: 32
       out_channels: 32
-    pos_encoding: sin_cos
-  decoder: simple_local_crop
+  decoder: simple_local
   decoder_kwargs:
     sample_mode: bilinear # bilinear / nearest
     hidden_size: 32
-  pos_encoding: sin_cos
   c_dim: 32
 training:
   out_dir: out/pointcloud_crop_training
@@ -46,7 +41,7 @@ training:
   n_workers: 8
   n_workers_val: 4
 test:
-  threshold: 0.001
+  threshold: 0.20
   eval_mesh: true
   eval_pointcloud: false
   model_file: model_best.pt

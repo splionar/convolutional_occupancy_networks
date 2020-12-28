@@ -510,52 +510,12 @@ class Abstract3DUNet(nn.Module):
             # reverse the encoder outputs to be aligned with the decoder
             encoders_features.insert(0, x)
 
-        # remove the last encoder's output from the list
-        # !!remember: it's the 1st in the list
-        #unet3d.pytorch.save(x, "testt.pt")
-        encoders_features = encoders_features[1:]
-
-        """
-        # decoder part (Multi-resolution)
-        decoded_fea = {}
-        decoded_fea['depth0'] = x
-
-        i = 0
-        for decoder, encoder_features in zip(self.decoders, encoders_features):
-            # pass the output from the corresponding encoder and the output
-            # of the previous decoder
-            decoded_fea['depth{}'.format(i+1)] = decoder(encoder_features, decoded_fea['depth{}'.format(i)])
-            i = i+1
-
-        decoded_fea['depth{}'.format(i)] = self.final_conv(decoded_fea['depth{}'.format(i)])
-
-        if self.testing and self.final_activation is not None:
-            decoded_fea['depth{}'.format(i)] = self.final_activation(decoded_fea['depth{}'.formal(i)])
-
-        return decoded_fea
-        """
-
-        # x, before decoder is the latent code to be stores
-        #dynalatent = x.clone()
-
-        # decoder part
-        for decoder, encoder_features in zip(self.decoders, encoders_features):
-            # pass the output from the corresponding encoder and the output
-            # of the previous decoder
-            x = decoder(encoder_features, x)
-            print(x.size())
-
-        x = self.final_conv(x)
-
-        # apply final_activation (i.e. Sigmoid or Softmax) only during prediction. During training the network outputs
-        # logits and it's up to the user to normalize it before visualising with tensorboard or computing validation metric
-        if self.testing and self.final_activation is not None:
-            x = self.final_activation(x)
+        # x is the latent code
 
         return x
 
 
-class UNet3D(Abstract3DUNet):
+class UNet3D_latent(Abstract3DUNet):
     """
     3DUnet model from
     `"3D U-Net: Learning Dense Volumetric Segmentation from Sparse Annotation"
@@ -566,7 +526,7 @@ class UNet3D(Abstract3DUNet):
 
     def __init__(self, in_channels, out_channels, final_sigmoid=True, f_maps=64, layer_order='gcr',
                  num_groups=8, num_levels=4, is_segmentation=True, **kwargs):
-        super(UNet3D, self).__init__(in_channels=in_channels, out_channels=out_channels, final_sigmoid=final_sigmoid,
+        super(UNet3D_latent, self).__init__(in_channels=in_channels, out_channels=out_channels, final_sigmoid=final_sigmoid,
                                      basic_module=NoSkipConnection, f_maps=f_maps, layer_order=layer_order,
                                      num_groups=num_groups, num_levels=num_levels, is_segmentation=is_segmentation,
                                      **kwargs)
