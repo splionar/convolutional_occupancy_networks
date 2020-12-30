@@ -458,8 +458,8 @@ class Abstract3DUNet(nn.Module):
             if i==3:
                 scale_factor = (2,2,2)
             else:
-                scale_factor = (4,4,4)
-            #scale_factor = (4,4,4)
+                scale_factor = (2,2,2)
+            scale_factor = (3,3,3)
             if i == 0:
                 encoder = Encoder(in_channels, out_feature_num, pool_kernel_size = scale_factor, apply_pooling=False, basic_module=basic_module,
                                   conv_layer_order=layer_order, num_groups=num_groups)
@@ -480,7 +480,7 @@ class Abstract3DUNet(nn.Module):
             #    scale_factor = (2,2,2)
             #else:
             #    scale_factor = (4,4,4)
-            scale_factor = (4, 4, 4) #no effect
+            scale_factor = (2, 2, 2) #no effect
 
             if basic_module == DoubleConv:
                 in_feature_num = reversed_f_maps[i] + reversed_f_maps[i + 1]
