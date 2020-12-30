@@ -518,7 +518,6 @@ class Abstract3DUNet(nn.Module):
             x = encoder(x)
             # reverse the encoder outputs to be aligned with the decoder
             encoders_features.insert(0, x)
-            print(x.size())
 
         # remove the last encoder's output from the list
         # !!remember: it's the 1st in the list
