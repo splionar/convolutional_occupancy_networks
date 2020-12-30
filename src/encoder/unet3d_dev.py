@@ -455,11 +455,11 @@ class Abstract3DUNet(nn.Module):
         # create encoder path consisting of Encoder modules. Depth of the encoder is equal to `len(f_maps)`
         encoders = []
         for i, out_feature_num in enumerate(f_maps):
-            #if i==1:
-            #    scale_factor = (2,2,2)
-            #else:
-            #    scale_factor = (4,4,4)
-            scale_factor = (4,4,4)
+            if i==3:
+                scale_factor = (2,2,2)
+            else:
+                scale_factor = (4,4,4)
+            #scale_factor = (4,4,4)
             if i == 0:
                 encoder = Encoder(in_channels, out_feature_num, pool_kernel_size = scale_factor, apply_pooling=False, basic_module=basic_module,
                                   conv_layer_order=layer_order, num_groups=num_groups)
@@ -480,7 +480,7 @@ class Abstract3DUNet(nn.Module):
             #    scale_factor = (2,2,2)
             #else:
             #    scale_factor = (4,4,4)
-            scale_factor = (4, 4, 4)
+            scale_factor = (4, 4, 4) #no effect
 
             if basic_module == DoubleConv:
                 in_feature_num = reversed_f_maps[i] + reversed_f_maps[i + 1]
@@ -520,6 +520,7 @@ class Abstract3DUNet(nn.Module):
             x = encoder(x)
             # reverse the encoder outputs to be aligned with the decoder
             encoders_features.insert(0, x)
+            #print(x.size())
 
         # remove the last encoder's output from the list
         # !!remember: it's the 1st in the list
