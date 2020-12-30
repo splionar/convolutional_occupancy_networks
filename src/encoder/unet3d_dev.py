@@ -255,7 +255,7 @@ class Encoder(nn.Module):
     """
 
     def __init__(self, in_channels, out_channels, conv_kernel_size=3, apply_pooling=True,
-                 pool_kernel_size=(4, 4, 4), pool_type='max', basic_module=DoubleConv, conv_layer_order='crg',
+                 pool_kernel_size=(2, 2, 2), pool_type='max', basic_module=DoubleConv, conv_layer_order='crg',
                  num_groups=8):
         super(Encoder, self).__init__()
         assert pool_type in ['max', 'avg']
@@ -297,7 +297,7 @@ class Decoder(nn.Module):
         num_groups (int): number of groups for the GroupNorm
     """
 
-    def __init__(self, in_channels, out_channels, kernel_size=3, scale_factor=(4, 4, 4), basic_module=DoubleConv,
+    def __init__(self, in_channels, out_channels, kernel_size=3, scale_factor=(2, 2, 2), basic_module=DoubleConv,
                  conv_layer_order='crg', num_groups=8, mode='nearest'):
         super(Decoder, self).__init__()
         if basic_module == DoubleConv:
@@ -363,7 +363,7 @@ class Upsampling(nn.Module):
     """
 
     def __init__(self, transposed_conv, in_channels=None, out_channels=None, kernel_size=3,
-                 scale_factor=(4, 4, 4), mode='nearest'):
+                 scale_factor=(2, 2, 2), mode='nearest'):
         super(Upsampling, self).__init__()
 
         if transposed_conv:
@@ -455,13 +455,17 @@ class Abstract3DUNet(nn.Module):
         # create encoder path consisting of Encoder modules. Depth of the encoder is equal to `len(f_maps)`
         encoders = []
         for i, out_feature_num in enumerate(f_maps):
+            if i==3:
+                scale_factor = (2,2,2)
+            else:
+                scale_factor = (4,4,4)
             if i == 0:
-                encoder = Encoder(in_channels, out_feature_num, apply_pooling=False, basic_module=basic_module,
+                encoder = Encoder(in_channels, out_feature_num, pool_kernel_size = scale_factor, apply_pooling=False, basic_module=basic_module,
                                   conv_layer_order=layer_order, num_groups=num_groups)
             else:
                 # TODO: adapt for anisotropy in the data, i.e. use proper pooling kernel to make the data isotropic after 1-2 pooling operations
                 # currently pools with a constant kernel: (2, 2, 2)
-                encoder = Encoder(f_maps[i - 1], out_feature_num, basic_module=basic_module,
+                encoder = Encoder(f_maps[i - 1], out_feature_num, pool_kernel_size = scale_factor, basic_module=basic_module,
                                   conv_layer_order=layer_order, num_groups=num_groups)
             encoders.append(encoder)
 
@@ -471,6 +475,11 @@ class Abstract3DUNet(nn.Module):
         decoders = []
         reversed_f_maps = list(reversed(f_maps))
         for i in range(len(reversed_f_maps) - 1):
+            if i==0:
+                scale_factor = (2,2,2)
+            else:
+                scale_factor = (4,4,4)
+
             if basic_module == DoubleConv:
                 in_feature_num = reversed_f_maps[i] + reversed_f_maps[i + 1]
             elif basic_module == NoSkipConnection:
@@ -481,7 +490,7 @@ class Abstract3DUNet(nn.Module):
             out_feature_num = reversed_f_maps[i + 1]
             # TODO: if non-standard pooling was used, make sure to use correct striding for transpose conv
             # currently strides with a constant stride: (2, 2, 2)
-            decoder = Decoder(in_feature_num, out_feature_num, basic_module=basic_module,
+            decoder = Decoder(in_feature_num, out_feature_num, scale_factor=scale_factor, basic_module=basic_module,
                               conv_layer_order=layer_order, num_groups=num_groups)
             decoders.append(decoder)
 
@@ -534,7 +543,7 @@ class Abstract3DUNet(nn.Module):
 
         return decoded_fea
         """
-        print(x.size())
+
         # x, before decoder is the latent code to be stores
         #dynalatent = x.clone()
 
