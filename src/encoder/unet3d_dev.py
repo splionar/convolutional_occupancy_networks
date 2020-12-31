@@ -459,7 +459,7 @@ class Abstract3DUNet(nn.Module):
                 scale_factor = (2,2,2)
             else:
                 scale_factor = (3,3,3)
-            #scale_factor = (2,2,2)
+            scale_factor = (2,2,2)
             if i == 0:
                 encoder = Encoder(in_channels, out_feature_num, pool_kernel_size = scale_factor, apply_pooling=False, basic_module=basic_module,
                                   conv_layer_order=layer_order, num_groups=num_groups)
