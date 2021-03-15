@@ -161,9 +161,9 @@ class Trainer(BaseTrainer):
         """
         if (use_rotation_tensor != True):
             angle_range = DEGREES
-            x_angle = radians(random.uniform(-1,1) * 5)
+            x_angle = radians(random.uniform(-1,1) * 5) * 0
             y_angle = radians(random.uniform(-1,1) * 180)
-            z_angle = radians(random.uniform(-1,1) * 5)
+            z_angle = radians(random.uniform(-1,1) * 5) * 0
 
             rot_x = torch.Tensor(
                 [[1, 0, 0, 0], [0, cos(x_angle), -sin(x_angle), 0], [0, sin(x_angle), cos(x_angle), 0], [0, 0, 0, 1]])
